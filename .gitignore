@@ -1,0 +1,40 @@
+# ════════════════════════════════════════════════════════════════
+# AstroNova — Git Ignore
+# ════════════════════════════════════════════════════════════════
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Node
+node_modules/
+dist/
+
+# Environment
+.env
+.env.local
+.env.production
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfplan
+tfplan
+terraform.tfvars
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+*.log

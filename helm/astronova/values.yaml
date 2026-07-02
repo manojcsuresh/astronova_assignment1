@@ -1,0 +1,52 @@
+# ════════════════════════════════════════════════════════════════
+# AstroNova Helm Chart — Default Values
+# ════════════════════════════════════════════════════════════════
+
+# ─── Backend Configuration ────────────────────────────────────
+backend:
+  replicaCount: 2
+  image:
+    repository: manojcs197/astronova_backend
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8000
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+# ─── Frontend Configuration ──────────────────────────────────
+frontend:
+  replicaCount: 2
+  image:
+    repository: manojcs197/astronova_frontend
+    tag: latest
+    pullPolicy: Always
+  service:
+    type: ClusterIP
+    port: 80
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+# ─── Ingress Configuration ───────────────────────────────────
+ingress:
+  enabled: true
+  className: nginx
+  host: astronova.15.206.176.33.nip.io
+  tls:
+    enabled: true
+    secretName: astronova-tls
+
+# ─── ConfigMap ────────────────────────────────────────────────
+config:
+  backendUrl: "http://astronova-backend:8000"

@@ -1,0 +1,53 @@
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: astronova-ingress
+  labels:
+    {{- include "astronova.labels" . | nindent 4 }}
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    - hosts:
+        - {{ .Values.ingress.host }}
+      secretName: {{ .Values.ingress.tls.secretName }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.ingress.host }}
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: astronova-backend
+                port:
+                  number: {{ .Values.backend.service.port }}
+          - path: /health
+            pathType: Exact
+            backend:
+              service:
+                name: astronova-backend
+                port:
+                  number: {{ .Values.backend.service.port }}
+          - path: /docs
+            pathType: Exact
+            backend:
+              service:
+                name: astronova-backend
+                port:
+                  number: {{ .Values.backend.service.port }}
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: astronova-frontend
+                port:
+                  number: {{ .Values.frontend.service.port }}
+{{- end }}

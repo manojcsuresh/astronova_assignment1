@@ -1,0 +1,27 @@
+# AstroNova — Terraform Variables Example
+# Copy this file to terraform.tfvars and fill in your values.
+
+# AWS region to deploy to
+aws_region = "ap-south-1"
+
+# EC2 instance type — t3.medium is recommended minimum for K8s
+instance_type = "t3.medium"
+
+# Name of your SSH key pair (must exist in your AWS account)
+key_name = "your-key-pair-name"
+
+# Ubuntu 22.04 LTS AMI ID for your region
+# Find yours: aws ec2 describe-images --owners 099720109477 \
+#   --filters "Name=name,Values=ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*" \
+#   --query 'sort_by(Images, &CreationDate)[-1].ImageId' --output text
+ami_id = "ami-0xxxxxxxxxxxxxxxxx"
+
+# Your IP for SSH access (recommended: use your specific IP/32)
+allowed_ssh_cidr = "0.0.0.0/0"
+
+# Project metadata
+project_name = "astronova"
+environment  = "prod"
+
+# Root volume size in GB
+root_volume_size = 30
