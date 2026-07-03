@@ -1,27 +1,6 @@
 #!/usr/bin/env bash
-# ════════════════════════════════════════════════════════════════
-# AstroNova — Master Deployment Automation Script
-#
-# This script automates the entire deployment pipeline:
-#   1. Build Docker images (backend + frontend)
-#   2. Push images to Docker Hub
-#   3. Provision AWS infrastructure via Terraform
-#   4. Wait for instances to be ready
-#   5. Provide instructions to configure kubeadm
-#   6. Install NGINX Ingress + cert-manager via Helm
-#   7. Deploy the AstroNova Helm chart
-#   8. Output the final application URL
-#
-# Prerequisites:
-#   - docker, terraform, helm, kubectl, aws CLI, ssh, jq
-#
-# Usage:
-#   ./deploy.sh [--skip-build] [--skip-infra] [--skip-k8s-setup]
-# ════════════════════════════════════════════════════════════════
-
 set -euo pipefail
 
-# ─── Configuration ────────────────────────────────────────────
 DOCKERHUB_USERNAME="${DOCKERHUB_USERNAME:-manojcs197}"
 IMAGE_TAG="${IMAGE_TAG:-latest}"
 BACKEND_IMAGE="${DOCKERHUB_USERNAME}/astronova_backend:${IMAGE_TAG}"
@@ -30,7 +9,6 @@ APP_DOMAIN="${APP_DOMAIN:-astronova.example.com}"
 SSH_KEY_PATH="${SSH_KEY_PATH:-~/.ssh/astronova.pem}"
 LETSENCRYPT_EMAIL="${LETSENCRYPT_EMAIL:-admin@example.com}"
 
-# Project paths
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 BACKEND_DIR="${PROJECT_ROOT}/backend"
@@ -39,12 +17,10 @@ TERRAFORM_DIR="${PROJECT_ROOT}/terraform"
 HELM_DIR="${PROJECT_ROOT}/helm/astronova"
 K8S_DIR="${PROJECT_ROOT}/k8s"
 
-# Flags
 SKIP_BUILD=false
 SKIP_INFRA=false
 SKIP_K8S_SETUP=false
 
-# ─── Colors & Logging ────────────────────────────────────────
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -58,7 +34,6 @@ error()  { echo -e "${RED}[ERROR]${NC}   $1"; exit 1; }
 header() { echo -e "\n${CYAN}${BOLD}═══════════════════════════════════════════════════${NC}"; echo -e "${CYAN}${BOLD}  $1${NC}"; echo -e "${CYAN}${BOLD}═══════════════════════════════════════════════════${NC}\n"; }
 step()   { echo -e "\n${BOLD}→ $1${NC}"; }
 
-# ─── Parse Arguments ─────────────────────────────────────────
 parse_args() {
     while [[ $# -gt 0 ]]; do
         case $1 in
@@ -67,18 +42,6 @@ parse_args() {
             --skip-k8s-setup) SKIP_K8S_SETUP=true ;;
             --help|-h)
                 echo "Usage: $0 [--skip-build] [--skip-infra] [--skip-k8s-setup]"
-                echo ""
-                echo "Options:"
-                echo "  --skip-build      Skip Docker image build & push"
-                echo "  --skip-infra      Skip Terraform provisioning"
-                echo "  --skip-k8s-setup  Skip kubeadm setup instructions"
-                echo ""
-                echo "Environment Variables:"
-                echo "  DOCKERHUB_USERNAME  Docker Hub username (required)"
-                echo "  IMAGE_TAG           Image tag (default: latest)"
-                echo "  APP_DOMAIN          Application domain (default: astronova.example.com)"
-                echo "  SSH_KEY_PATH        Path to SSH key for EC2 (default: ~/.ssh/astronova.pem)"
-                echo "  LETSENCRYPT_EMAIL   Email for Let's Encrypt (default: admin@example.com)"
                 exit 0
                 ;;
             *) error "Unknown option: $1. Use --help for usage." ;;
@@ -87,7 +50,6 @@ parse_args() {
     done
 }
 
-# ─── Check Prerequisites ────────────────────────────────────
 check_prerequisites() {
     header "Checking Prerequisites"
 
@@ -108,7 +70,6 @@ check_prerequisites() {
     log "All prerequisites met."
 }
 
-# ─── Step 1: Build Docker Images ────────────────────────────
 build_images() {
     if $SKIP_BUILD; then
         warn "Skipping Docker build (--skip-build)"
@@ -129,7 +90,6 @@ build_images() {
     log "Frontend image built successfully."
 }
 
-# ─── Step 2: Push to Docker Hub ─────────────────────────────
 push_images() {
     if $SKIP_BUILD; then
         warn "Skipping Docker push (--skip-build)"
@@ -150,7 +110,6 @@ push_images() {
     log "Frontend image pushed."
 }
 
-# ─── Step 3: Terraform Provisioning ─────────────────────────
 provision_infra() {
     if $SKIP_INFRA; then
         warn "Skipping Terraform provisioning (--skip-infra)"
@@ -171,7 +130,6 @@ provision_infra() {
     log "Infrastructure provisioned."
 }
 
-# ─── Step 4: Wait for Instances ─────────────────────────────
 wait_for_instances() {
     if $SKIP_INFRA; then
         warn "Skipping instance wait (--skip-infra)"
@@ -180,7 +138,6 @@ wait_for_instances() {
 
     header "Step 4: Waiting for EC2 Instances"
 
-    # Get IPs from Terraform output
     local cp_ip
     cp_ip=$(terraform -chdir="${TERRAFORM_DIR}" output -raw control_plane_public_ip)
     local w1_ip
@@ -207,7 +164,6 @@ wait_for_instances() {
     done
 }
 
-# ─── Step 5: Kubernetes Setup Instructions ──────────────────
 k8s_setup_instructions() {
     if $SKIP_K8S_SETUP; then
         warn "Skipping K8s setup instructions (--skip-k8s-setup)"
@@ -249,11 +205,9 @@ k8s_setup_instructions() {
     kubectl get nodes || warn "Could not reach cluster — ensure kubeconfig is set."
 }
 
-# ─── Step 6: Install Ingress & cert-manager ─────────────────
 install_ingress_and_certs() {
     header "Step 6: Installing NGINX Ingress & cert-manager"
 
-    # Update ClusterIssuer email
     sed -i "s/your-email@example.com/${LETSENCRYPT_EMAIL}/" "${K8S_DIR}/cluster-issuer.yaml"
 
     bash "${K8S_DIR}/ingress-setup.sh"
@@ -261,7 +215,6 @@ install_ingress_and_certs() {
     log "Ingress and cert-manager are ready."
 }
 
-# ─── Step 7: Deploy Application ─────────────────────────────
 deploy_application() {
     header "Step 7: Deploying AstroNova Application"
 
@@ -285,7 +238,6 @@ deploy_application() {
     log "All pods are ready."
 }
 
-# ─── Step 8: Output Summary ─────────────────────────────────
 output_summary() {
     header "Deployment Complete!"
 
@@ -302,18 +254,17 @@ output_summary() {
     echo ""
 
     echo -e "${GREEN}${BOLD}Useful Commands:${NC}"
-    echo "  kubectl get pods                    # List all pods"
-    echo "  kubectl get svc                     # List all services"
-    echo "  kubectl get ingress                 # List ingress rules"
-    echo "  kubectl logs -l app.kubernetes.io/name=astronova-backend   # Backend logs"
-    echo "  kubectl logs -l app.kubernetes.io/name=astronova-frontend  # Frontend logs"
-    echo "  helm status astronova               # Helm release status"
+    echo "  kubectl get pods"
+    echo "  kubectl get svc"
+    echo "  kubectl get ingress"
+    echo "  kubectl logs -l app.kubernetes.io/name=astronova-backend"
+    echo "  kubectl logs -l app.kubernetes.io/name=astronova-frontend"
+    echo "  helm status astronova"
     echo ""
 
     log "Deployment complete. Your app is live at https://${APP_DOMAIN}"
 }
 
-# ─── Main ────────────────────────────────────────────────────
 main() {
     parse_args "$@"
 

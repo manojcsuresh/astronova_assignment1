@@ -1,7 +1,3 @@
-# ════════════════════════════════════════════════════════════════
-# AstroNova — Terraform Outputs
-# ════════════════════════════════════════════════════════════════
-
 output "control_plane_public_ip" {
   description = "Public IP of the control plane node"
   value       = aws_instance.k8s_nodes[0].public_ip

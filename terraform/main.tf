@@ -1,6 +1,3 @@
-# AstroNova — Terraform Main Configuration
-
-
 terraform {
   required_version = ">= 1.5.0"
 
@@ -16,13 +13,10 @@ provider "aws" {
   region = var.aws_region
 }
 
-# ─── Data Sources ─────────────────────────────────────────────
-# Use the default VPC
 data "aws_vpc" "default" {
   default = true
 }
 
-# Get a public subnet from the default VPC
 data "aws_subnets" "default" {
   filter {
     name   = "vpc-id"
@@ -35,7 +29,6 @@ data "aws_subnets" "default" {
   }
 }
 
-# ─── Security Group: SSH Access ───────────────────────────────
 resource "aws_security_group" "k8s_ssh" {
   name        = "${var.project_name}-ssh-sg"
   description = "Allow SSH access"
@@ -63,7 +56,6 @@ resource "aws_security_group" "k8s_ssh" {
   }
 }
 
-# ─── Security Group: HTTP/HTTPS ───────────────────────────────
 resource "aws_security_group" "k8s_web" {
   name        = "${var.project_name}-web-sg"
   description = "Allow HTTP and HTTPS traffic"
@@ -107,13 +99,11 @@ resource "aws_security_group" "k8s_web" {
   }
 }
 
-# ─── Security Group: Kubernetes Inter-Node Communication ─────
 resource "aws_security_group" "k8s_cluster" {
   name        = "${var.project_name}-k8s-sg"
   description = "Allow all Kubernetes communication between nodes"
   vpc_id      = data.aws_vpc.default.id
 
-  # Kubernetes API Server
   ingress {
     description = "Kubernetes API Server"
     from_port   = 6443
@@ -122,7 +112,6 @@ resource "aws_security_group" "k8s_cluster" {
     self        = true
   }
 
-  # etcd server client API
   ingress {
     description = "etcd server client API"
     from_port   = 2379
@@ -131,7 +120,6 @@ resource "aws_security_group" "k8s_cluster" {
     self        = true
   }
 
-  # Kubelet API
   ingress {
     description = "Kubelet API"
     from_port   = 10250
@@ -140,7 +128,6 @@ resource "aws_security_group" "k8s_cluster" {
     self        = true
   }
 
-  # kube-scheduler
   ingress {
     description = "kube-scheduler"
     from_port   = 10259
@@ -149,7 +136,6 @@ resource "aws_security_group" "k8s_cluster" {
     self        = true
   }
 
-  # kube-controller-manager
   ingress {
     description = "kube-controller-manager"
     from_port   = 10257
@@ -158,7 +144,6 @@ resource "aws_security_group" "k8s_cluster" {
     self        = true
   }
 
-  # Flannel / Calico VXLAN
   ingress {
     description = "VXLAN overlay networking"
     from_port   = 8472
@@ -167,7 +152,6 @@ resource "aws_security_group" "k8s_cluster" {
     self        = true
   }
 
-  # Calico BGP
   ingress {
     description = "Calico BGP"
     from_port   = 179
@@ -176,7 +160,6 @@ resource "aws_security_group" "k8s_cluster" {
     self        = true
   }
 
-  # Allow all traffic between nodes in the cluster (catch-all for CNI)
   ingress {
     description = "All inter-node traffic"
     from_port   = 0
@@ -199,7 +182,6 @@ resource "aws_security_group" "k8s_cluster" {
   }
 }
 
-# ─── Locals ──────────────────────────────────────────────────
 locals {
   node_names = ["control-plane", "worker-1", "worker-2"]
 
@@ -210,7 +192,6 @@ locals {
   }
 }
 
-# ─── EC2 Instances ───────────────────────────────────────────
 resource "aws_instance" "k8s_nodes" {
   count = 3
 

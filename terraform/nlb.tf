@@ -1,14 +1,12 @@
-# --- Elastic IP for NLB ---
 resource "aws_eip" "nlb_eip" {
   domain = "vpc"
 }
 
-# --- Network Load Balancer ---
 resource "aws_lb" "astronova_nlb" {
   name               = "astronova-nlb"
   internal           = false
   load_balancer_type = "network"
-  
+
   subnet_mapping {
     subnet_id     = data.aws_subnets.default.ids[0]
     allocation_id = aws_eip.nlb_eip.id
@@ -21,7 +19,6 @@ resource "aws_lb" "astronova_nlb" {
   }
 }
 
-# --- Target Groups (mapping to NodePorts) ---
 resource "aws_lb_target_group" "http" {
   name     = "astronova-http-tg"
   port     = 30080
@@ -46,7 +43,6 @@ resource "aws_lb_target_group" "https" {
   }
 }
 
-# --- Listeners (Port 80 and 443) ---
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.astronova_nlb.arn
   port              = 80
@@ -69,7 +65,6 @@ resource "aws_lb_listener" "https" {
   }
 }
 
-# --- Attach Worker Nodes to Target Groups ---
 resource "aws_lb_target_group_attachment" "worker_http" {
   count            = 2
   target_group_arn = aws_lb_target_group.http.arn

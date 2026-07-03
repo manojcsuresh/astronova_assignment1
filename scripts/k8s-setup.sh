@@ -1,22 +1,10 @@
 #!/usr/bin/env bash
-# ════════════════════════════════════════════════════════════════
-# AstroNova — Kubernetes Cluster Setup Script
-# Sets up a kubeadm-based K8s cluster on Ubuntu 22.04
-#
-# Usage:
-#   Control Plane:  sudo ./k8s-setup.sh init
-#   Worker Node:    sudo ./k8s-setup.sh join <join-command>
-#   All Nodes:      sudo ./k8s-setup.sh install  (installs prereqs only)
-# ════════════════════════════════════════════════════════════════
-
 set -euo pipefail
 
-# ─── Configuration ────────────────────────────────────────────
 KUBE_VERSION="1.30"
 POD_CIDR="10.244.0.0/16"
 CONTAINERD_VERSION="1.7.18"
 
-# ─── Colors ───────────────────────────────────────────────────
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -28,7 +16,6 @@ warn()  { echo -e "${YELLOW}[WARN]${NC}  $1"; }
 error() { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
 header(){ echo -e "\n${CYAN}══════════════════════════════════════════${NC}"; echo -e "${CYAN}  $1${NC}"; echo -e "${CYAN}══════════════════════════════════════════${NC}\n"; }
 
-# ─── Pre-checks ──────────────────────────────────────────────
 check_root() {
     if [[ $EUID -ne 0 ]]; then
         error "This script must be run as root (use sudo)"
@@ -41,7 +28,6 @@ check_ubuntu() {
     fi
 }
 
-# ─── Step 1: System Preparation ──────────────────────────────
 prepare_system() {
     header "Preparing System"
 
@@ -72,7 +58,6 @@ EOF
     log "System preparation complete."
 }
 
-# ─── Step 2: Install containerd ──────────────────────────────
 install_containerd() {
     header "Installing containerd"
 
@@ -104,7 +89,6 @@ install_containerd() {
     log "containerd installed and configured."
 }
 
-# ─── Step 3: Install kubeadm, kubelet, kubectl ──────────────
 install_kube_tools() {
     header "Installing kubeadm, kubelet, kubectl (v${KUBE_VERSION})"
 
@@ -124,7 +108,6 @@ install_kube_tools() {
     apt-get update -qq
     apt-get install -y -qq kubelet kubeadm kubectl > /dev/null
 
-    # Prevent automatic updates
     apt-mark hold kubelet kubeadm kubectl
 
     systemctl enable kubelet
@@ -132,7 +115,6 @@ install_kube_tools() {
     log "kubeadm, kubelet, kubectl installed and held."
 }
 
-# ─── Step 4: Initialize Control Plane ────────────────────────
 init_control_plane() {
     header "Initializing Kubernetes Control Plane"
 
@@ -142,13 +124,11 @@ init_control_plane() {
         --cri-socket=unix:///var/run/containerd/containerd.sock \
         | tee /root/kubeadm-init.log
 
-    # Setup kubectl for root
     log "Configuring kubectl for root..."
     mkdir -p /root/.kube
     cp -f /etc/kubernetes/admin.conf /root/.kube/config
     chown root:root /root/.kube/config
 
-    # Setup kubectl for the ubuntu user (if exists)
     if id "ubuntu" &>/dev/null; then
         log "Configuring kubectl for ubuntu user..."
         UBUNTU_HOME=$(eval echo ~ubuntu)
@@ -157,12 +137,10 @@ init_control_plane() {
         chown -R ubuntu:ubuntu "${UBUNTU_HOME}/.kube"
     fi
 
-    # Install Flannel CNI
     log "Installing Flannel CNI plugin..."
     export KUBECONFIG=/etc/kubernetes/admin.conf
     kubectl apply -f https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml
 
-    # Display the join command
     echo ""
     header "Cluster Initialized Successfully!"
     log "Save the following join command for your worker nodes:"
@@ -172,7 +150,6 @@ init_control_plane() {
     log "Kubeadm init log saved to: /root/kubeadm-init.log"
 }
 
-# ─── Main ────────────────────────────────────────────────────
 main() {
     check_root
     check_ubuntu

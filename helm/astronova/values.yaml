@@ -1,8 +1,3 @@
-# ════════════════════════════════════════════════════════════════
-# AstroNova Helm Chart — Default Values
-# ════════════════════════════════════════════════════════════════
-
-# ─── Backend Configuration ────────────────────────────────────
 backend:
   replicaCount: 2
   image:
@@ -20,7 +15,6 @@ backend:
       cpu: 500m
       memory: 256Mi
 
-# ─── Frontend Configuration ──────────────────────────────────
 frontend:
   replicaCount: 2
   image:
@@ -38,7 +32,6 @@ frontend:
       cpu: 200m
       memory: 128Mi
 
-# ─── Ingress Configuration ───────────────────────────────────
 ingress:
   enabled: true
   className: nginx
@@ -47,6 +40,5 @@ ingress:
     enabled: true
     secretName: astronova-tls
 
-# ─── ConfigMap ────────────────────────────────────────────────
 config:
   backendUrl: "http://astronova-backend:8000"

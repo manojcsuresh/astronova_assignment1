@@ -1,13 +1,4 @@
 #!/usr/bin/env bash
-# ════════════════════════════════════════════════════════════════
-# AstroNova — NGINX Ingress & cert-manager Installation Script
-#
-# Installs:
-#   1. NGINX Ingress Controller (via Helm)
-#   2. cert-manager (via Helm)
-#   3. Let's Encrypt ClusterIssuer
-# ════════════════════════════════════════════════════════════════
-
 set -euo pipefail
 
 RED='\033[0;31m'
@@ -20,7 +11,6 @@ header(){ echo -e "\n${CYAN}═════════════════�
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# ─── Check Prerequisites ────────────────────────────────────
 check_prereqs() {
     for cmd in helm kubectl; do
         if ! command -v "$cmd" &>/dev/null; then
@@ -30,7 +20,6 @@ check_prereqs() {
     done
 }
 
-# ─── Install NGINX Ingress Controller ───────────────────────
 install_nginx_ingress() {
     header "Installing NGINX Ingress Controller"
 
@@ -52,7 +41,6 @@ install_nginx_ingress() {
     log "HTTPS: NodePort 30443"
 }
 
-# ─── Install cert-manager ───────────────────────────────────
 install_cert_manager() {
     header "Installing cert-manager"
 
@@ -68,13 +56,11 @@ install_cert_manager() {
 
     log "cert-manager installed."
 
-    # Wait for cert-manager webhook to be ready
     log "Waiting for cert-manager webhook to be ready..."
     kubectl wait --for=condition=Available deployment/cert-manager-webhook \
         -n cert-manager --timeout=120s
 }
 
-# ─── Apply ClusterIssuer ────────────────────────────────────
 apply_cluster_issuer() {
     header "Applying Let's Encrypt ClusterIssuer"
 
@@ -83,7 +69,6 @@ apply_cluster_issuer() {
     log "ClusterIssuer 'letsencrypt-prod' applied."
 }
 
-# ─── Main ────────────────────────────────────────────────────
 main() {
     check_prereqs
     install_nginx_ingress

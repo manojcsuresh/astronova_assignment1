@@ -1,17 +1,9 @@
-"""
-In-memory data store for books.
-Uses a dictionary keyed by UUID for O(1) lookups.
-"""
-
 from typing import Dict
 
-# In-memory book store: { id: book_dict }
 books_db: Dict[str, dict] = {}
 
 
-# Seed some initial data so the API isn't empty on first run
 def seed_data() -> None:
-    """Pre-populate the store with sample books."""
     import uuid
 
     samples = [
@@ -52,5 +44,4 @@ def seed_data() -> None:
         books_db[book_id] = {"id": book_id, **book}
 
 
-# Auto-seed on module import
 seed_data()

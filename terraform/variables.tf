@@ -1,7 +1,3 @@
-# ════════════════════════════════════════════════════════════════
-# AstroNova — Terraform Variables
-# ════════════════════════════════════════════════════════════════
-
 variable "aws_region" {
   description = "AWS region to deploy resources"
   type        = string
@@ -20,7 +16,7 @@ variable "key_name" {
 }
 
 variable "ami_id" {
-  description = "AMI ID for Ubuntu 22.04 LTS — find via aws ec2 describe-images"
+  description = "AMI ID for Ubuntu 22.04 LTS"
   type        = string
 }
 

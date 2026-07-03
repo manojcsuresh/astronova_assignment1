@@ -1,8 +1,3 @@
-"""
-AstroNova API — FastAPI Application Entry Point
-Manages a 'Book' entity with full CRUD operations in-memory.
-"""
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -17,7 +12,6 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-# ─── CORS Middleware ──────────────────────────────────────────
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -26,7 +20,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ─── Register Routes ─────────────────────────────────────────
 app.include_router(health_router, tags=["Health"])
 app.include_router(books_router, prefix="/api/books", tags=["Books"])
 

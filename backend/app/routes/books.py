@@ -1,7 +1,3 @@
-"""
-Book CRUD routes — GET, POST, PATCH, DELETE.
-"""
-
 import uuid
 from typing import List
 
@@ -20,7 +16,6 @@ router = APIRouter()
     status_code=status.HTTP_200_OK,
 )
 async def get_books():
-    """Return every book in the store."""
     return list(books_db.values())
 
 
@@ -31,7 +26,6 @@ async def get_books():
     status_code=status.HTTP_200_OK,
 )
 async def get_book(book_id: str):
-    """Return a single book or 404."""
     book = books_db.get(book_id)
     if not book:
         raise HTTPException(
@@ -48,7 +42,6 @@ async def get_book(book_id: str):
     status_code=status.HTTP_201_CREATED,
 )
 async def create_book(payload: BookCreate):
-    """Create a book with an auto-generated UUID."""
     book_id = str(uuid.uuid4())
     book = {"id": book_id, **payload.model_dump()}
     books_db[book_id] = book
@@ -62,7 +55,6 @@ async def create_book(payload: BookCreate):
     status_code=status.HTTP_200_OK,
 )
 async def update_book(book_id: str, payload: BookUpdate):
-    """Update only the fields provided in the request body."""
     book = books_db.get(book_id)
     if not book:
         raise HTTPException(
@@ -88,7 +80,6 @@ async def update_book(book_id: str, payload: BookUpdate):
     status_code=status.HTTP_204_NO_CONTENT,
 )
 async def delete_book(book_id: str):
-    """Remove a book from the store or return 404."""
     if book_id not in books_db:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

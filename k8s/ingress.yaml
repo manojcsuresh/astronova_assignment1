@@ -1,19 +1,12 @@
-# ════════════════════════════════════════════════════════════════
-# AstroNova — Standalone Ingress Resource
-# Use this if NOT deploying via the Helm chart's built-in ingress
-# ════════════════════════════════════════════════════════════════
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: astronova-ingress
   namespace: default
   annotations:
-    # Force HTTP → HTTPS redirect
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
-    # Use Let's Encrypt for TLS
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
-    # Request body size limit
     nginx.ingress.kubernetes.io/proxy-body-size: "10m"
 spec:
   ingressClassName: nginx
@@ -25,7 +18,6 @@ spec:
     - host: astronova.example.com
       http:
         paths:
-          # Backend API routes
           - path: /api
             pathType: Prefix
             backend:
@@ -33,7 +25,6 @@ spec:
                 name: astronova-backend
                 port:
                   number: 8000
-          # Backend health check
           - path: /health
             pathType: Exact
             backend:
@@ -41,7 +32,6 @@ spec:
                 name: astronova-backend
                 port:
                   number: 8000
-          # API documentation
           - path: /docs
             pathType: Exact
             backend:
@@ -49,7 +39,6 @@ spec:
                 name: astronova-backend
                 port:
                   number: 8000
-          # Frontend (catch-all — must be last)
           - path: /
             pathType: Prefix
             backend:
