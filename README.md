@@ -410,102 +410,14 @@ The current backend uses a Python dictionary (`books_db`) as its data store. Wit
 
 | Approach | Pros | Cons | Effort |
 |----------|------|------|--------|
-| **Redis (Recommended)** | Shared state, sub-millisecond reads, easy Helm chart | Adds a dependency | Low |
+| **Redis** | Shared state, sub-millisecond reads, easy Helm chart | Adds a dependency | Low |
 | **PostgreSQL / MySQL** | ACID compliance, persistent data | Heavier, schema migrations | Medium |
-| **Sticky Sessions** | No backend changes needed | Breaks if pod restarts, uneven load | Low |
-| **SQLite + PVC** | Simple, no extra service | Single-writer limitation, can't scale replicas | Low |
 
-#### Recommended: Redis Shared Store
-
-```python
-# store.py — Redis-backed implementation
-import json
-import os
-import redis
-
-redis_client = redis.Redis(
-    host=os.getenv("REDIS_HOST", "localhost"),
-    port=int(os.getenv("REDIS_PORT", 6379)),
-    db=0,
-    decode_responses=True,
-)
-
-def get_all_books():
-    keys = redis_client.keys("book:*")
-    return [json.loads(redis_client.get(k)) for k in keys]
-
-def get_book(book_id: str):
-    data = redis_client.get(f"book:{book_id}")
-    return json.loads(data) if data else None
-
-def create_book(book_id: str, book: dict):
-    redis_client.set(f"book:{book_id}", json.dumps(book))
-
-def delete_book(book_id: str):
-    redis_client.delete(f"book:{book_id}")
-```
-
-Add Redis to the Helm chart:
-
-```yaml
-# values.yaml
-redis:
-  enabled: true
-  image: redis:7-alpine
-  port: 6379
-```
-
-#### Alternative: Sticky Sessions (Quick Fix)
-
-```yaml
-# ingress.yaml annotation
-nginx.ingress.kubernetes.io/affinity: "cookie"
-nginx.ingress.kubernetes.io/session-cookie-name: "astronova-session"
-nginx.ingress.kubernetes.io/session-cookie-max-age: "3600"
-```
 
 > **Note:** For this demo, the in-memory store is intentional to keep the focus on Kubernetes infrastructure. The solutions above would be applied before any production deployment.
 
 ---
 
-## Security Considerations
-
-### SSH Access
-
-The `allowed_ssh_cidr` Terraform variable defaults to `0.0.0.0/0` for demo convenience. **In production:**
-
-```hcl
-# terraform.tfvars — restrict to your IP or VPN CIDR
-allowed_ssh_cidr = "203.0.113.50/32"  # Your office/VPN IP
-```
-
-### NodePort Exposure
-
-The web security group currently allows `0.0.0.0/0` on the NodePort range (30000–32767). **Production hardening:**
-
-```hcl
-# Restrict NodePorts to NLB subnets only
-ingress {
-  description = "NodePort range - NLB only"
-  from_port   = 30000
-  to_port     = 32767
-  protocol    = "tcp"
-  cidr_blocks = ["<NLB_SUBNET_CIDR>"]  # e.g., "172.31.0.0/16"
-}
-```
-
-### Additional Production Recommendations
-
-| Area | Recommendation |
-|------|---------------|
-| **SSH** | Replace SSH keys with AWS SSM Session Manager (no open ports needed) |
-| **Secrets** | Use Kubernetes Secrets or AWS Secrets Manager for sensitive config |
-| **RBAC** | Implement Kubernetes RBAC with least-privilege service accounts |
-| **Pod Security** | Enable Pod Security Standards (restricted profile) |
-| **Image Scanning** | Scan Docker images with Trivy or Snyk in CI pipeline |
-| **Audit Logging** | Enable Kubernetes audit logging for compliance |
-
----
 
 ## CI/CD Pipeline
 
