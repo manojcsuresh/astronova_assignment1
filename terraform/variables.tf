@@ -26,6 +26,12 @@ variable "allowed_ssh_cidr" {
   default     = "0.0.0.0/0"
 }
 
+variable "allowed_nodeport_cidr" {
+  description = "CIDR block allowed to access Kubernetes NodePorts"
+  type        = string
+  default     = "0.0.0.0/0"
+}
+
 variable "project_name" {
   description = "Project name used for tagging resources"
   type        = string
