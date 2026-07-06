@@ -51,7 +51,7 @@ jobs:
       - name: Run smoke test
         run: |
           ssh -i ~/.ssh/deploy_key ubuntu@${{ env.CONTROL_PLANE_HOST }} \
-            "curl -sf http://localhost:30080/health || exit 1"
+            "curl -sf -L -k -H 'Host: astronova.15.206.176.33.nip.io' http://localhost:30080/health || exit 1"
 
       - name: Cleanup SSH key
         if: always()
