@@ -1,0 +1,58 @@
+name: CD Pipeline
+
+on:
+  workflow_run:
+    workflows: ["CI Pipeline"]
+    types: [completed]
+    branches: [main]
+
+env:
+  CONTROL_PLANE_HOST: ${{ secrets.CONTROL_PLANE_HOST }}
+
+jobs:
+  deploy:
+    name: Deploy to Kubernetes
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ env.CONTROL_PLANE_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Copy Helm chart to control plane
+        run: |
+          scp -i ~/.ssh/deploy_key -r helm/astronova \
+            ubuntu@${{ env.CONTROL_PLANE_HOST }}:~/astronova-chart
+
+      - name: Deploy via Helm
+        run: |
+          ssh -i ~/.ssh/deploy_key ubuntu@${{ env.CONTROL_PLANE_HOST }} \
+            "helm upgrade --install astronova ~/astronova-chart \
+              --set backend.image.tag=${{ github.sha }} \
+              --set frontend.image.tag=${{ github.sha }} \
+              --wait --timeout 120s"
+
+      - name: Verify deployment
+        run: |
+          ssh -i ~/.ssh/deploy_key ubuntu@${{ env.CONTROL_PLANE_HOST }} \
+            "kubectl rollout status deployment/astronova-backend --timeout=60s && \
+             kubectl rollout status deployment/astronova-frontend --timeout=60s"
+
+      - name: Run smoke test
+        run: |
+          ssh -i ~/.ssh/deploy_key ubuntu@${{ env.CONTROL_PLANE_HOST }} \
+            "curl -sf http://localhost:30080/health || exit 1"
+
+      - name: Cleanup SSH key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key

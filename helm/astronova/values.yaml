@@ -42,3 +42,6 @@ ingress:
 
 config:
   backendUrl: "http://astronova-backend:8000"
+
+networkPolicies:
+  enabled: true

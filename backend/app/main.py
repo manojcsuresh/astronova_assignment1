@@ -3,6 +3,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.routes.books import router as books_router
 from app.routes.health import router as health_router
+from app.logging_config import setup_logging, RequestLoggingMiddleware
+
+# Initialize structured logging
+logger = setup_logging()
 
 app = FastAPI(
     title="AstroNova Book API",
@@ -20,8 +24,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Add request/response logging middleware
+app.add_middleware(RequestLoggingMiddleware)
+
 app.include_router(health_router, tags=["Health"])
 app.include_router(books_router, prefix="/api/books", tags=["Books"])
+
+logger.info("AstroNova Book API started successfully")
 
 
 @app.get("/", include_in_schema=False)
@@ -31,3 +40,4 @@ async def root():
         "version": "1.0.0",
         "docs": "/docs",
     }
+

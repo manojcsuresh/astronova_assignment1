@@ -63,16 +63,22 @@ A production-grade Books Management application deployed on a kubeadm-based Kube
 
 ```
 assignment_1/
+├── .github/workflows/          # CI/CD Pipelines
+│   ├── ci.yml                  # Lint, test, build, push Docker images
+│   └── cd.yml                  # Deploy to Kubernetes via Helm
 ├── backend/                    # FastAPI REST API
 │   ├── Dockerfile
 │   ├── requirements.txt
-│   └── app/
-│       ├── main.py             # FastAPI app entry point
-│       ├── models.py           # Pydantic schemas
-│       ├── store.py            # In-memory data store
-│       └── routes/
-│           ├── books.py        # CRUD endpoints
-│           └── health.py       # Health check endpoint
+│   ├── app/
+│   │   ├── main.py             # FastAPI app entry point
+│   │   ├── models.py           # Pydantic schemas
+│   │   ├── store.py            # In-memory data store
+│   │   ├── logging_config.py   # Structured JSON logging & middleware
+│   │   └── routes/
+│   │       ├── books.py        # CRUD endpoints
+│   │       └── health.py       # Health check endpoint
+│   └── tests/
+│       └── test_books.py       # pytest unit tests (20 tests)
 ├── frontend/                   # Vue.js SPA
 │   ├── Dockerfile
 │   ├── nginx.conf              # NGINX reverse proxy config
@@ -101,7 +107,8 @@ assignment_1/
 │       ├── frontend-deployment.yaml
 │       ├── frontend-service.yaml
 │       ├── configmap.yaml
-│       └── ingress.yaml
+│       ├── ingress.yaml
+│       └── network-policy.yaml # Network policies (default deny + whitelist)
 ├── k8s/                        # Kubernetes manifests
 │   ├── cluster-issuer.yaml     # Let's Encrypt ClusterIssuer
 │   ├── ingress.yaml            # Standalone ingress (alternative)
@@ -391,6 +398,293 @@ The Ingress resource includes `cert-manager.io/cluster-issuer: "letsencrypt-prod
 
 ---
 
+## In-Memory Store: Multi-Replica Considerations
+
+The current backend uses a Python dictionary (`books_db`) as its data store. With `replicaCount: 2`, each pod maintains its own independent copy of the store. This means:
+
+- A book created via Pod A is **not visible** from Pod B
+- Deleting a book on one pod leaves it accessible on the other
+- The NLB/Ingress round-robins requests, so users see **inconsistent data**
+
+### Production Solutions
+
+| Approach | Pros | Cons | Effort |
+|----------|------|------|--------|
+| **Redis (Recommended)** | Shared state, sub-millisecond reads, easy Helm chart | Adds a dependency | Low |
+| **PostgreSQL / MySQL** | ACID compliance, persistent data | Heavier, schema migrations | Medium |
+| **Sticky Sessions** | No backend changes needed | Breaks if pod restarts, uneven load | Low |
+| **SQLite + PVC** | Simple, no extra service | Single-writer limitation, can't scale replicas | Low |
+
+#### Recommended: Redis Shared Store
+
+```python
+# store.py — Redis-backed implementation
+import json
+import os
+import redis
+
+redis_client = redis.Redis(
+    host=os.getenv("REDIS_HOST", "localhost"),
+    port=int(os.getenv("REDIS_PORT", 6379)),
+    db=0,
+    decode_responses=True,
+)
+
+def get_all_books():
+    keys = redis_client.keys("book:*")
+    return [json.loads(redis_client.get(k)) for k in keys]
+
+def get_book(book_id: str):
+    data = redis_client.get(f"book:{book_id}")
+    return json.loads(data) if data else None
+
+def create_book(book_id: str, book: dict):
+    redis_client.set(f"book:{book_id}", json.dumps(book))
+
+def delete_book(book_id: str):
+    redis_client.delete(f"book:{book_id}")
+```
+
+Add Redis to the Helm chart:
+
+```yaml
+# values.yaml
+redis:
+  enabled: true
+  image: redis:7-alpine
+  port: 6379
+```
+
+#### Alternative: Sticky Sessions (Quick Fix)
+
+```yaml
+# ingress.yaml annotation
+nginx.ingress.kubernetes.io/affinity: "cookie"
+nginx.ingress.kubernetes.io/session-cookie-name: "astronova-session"
+nginx.ingress.kubernetes.io/session-cookie-max-age: "3600"
+```
+
+> **Note:** For this demo, the in-memory store is intentional to keep the focus on Kubernetes infrastructure. The solutions above would be applied before any production deployment.
+
+---
+
+## Security Considerations
+
+### SSH Access
+
+The `allowed_ssh_cidr` Terraform variable defaults to `0.0.0.0/0` for demo convenience. **In production:**
+
+```hcl
+# terraform.tfvars — restrict to your IP or VPN CIDR
+allowed_ssh_cidr = "203.0.113.50/32"  # Your office/VPN IP
+```
+
+### NodePort Exposure
+
+The web security group currently allows `0.0.0.0/0` on the NodePort range (30000–32767). **Production hardening:**
+
+```hcl
+# Restrict NodePorts to NLB subnets only
+ingress {
+  description = "NodePort range - NLB only"
+  from_port   = 30000
+  to_port     = 32767
+  protocol    = "tcp"
+  cidr_blocks = ["<NLB_SUBNET_CIDR>"]  # e.g., "172.31.0.0/16"
+}
+```
+
+### Additional Production Recommendations
+
+| Area | Recommendation |
+|------|---------------|
+| **SSH** | Replace SSH keys with AWS SSM Session Manager (no open ports needed) |
+| **Secrets** | Use Kubernetes Secrets or AWS Secrets Manager for sensitive config |
+| **RBAC** | Implement Kubernetes RBAC with least-privilege service accounts |
+| **Pod Security** | Enable Pod Security Standards (restricted profile) |
+| **Image Scanning** | Scan Docker images with Trivy or Snyk in CI pipeline |
+| **Audit Logging** | Enable Kubernetes audit logging for compliance |
+
+---
+
+## CI/CD Pipeline
+
+GitHub Actions workflows are defined in `.github/workflows/`:
+
+### CI Pipeline (`ci.yml`)
+
+Triggered on every push to `main`/`develop` and on pull requests:
+
+```
+┌──────────────┐    ┌───────────────┐    ┌────────────┐
+│ Backend Test  │    │ Frontend Build│    │ Helm Lint  │
+│              │    │               │    │            │
+│ • flake8     │    │ • npm ci      │    │ • helm lint│
+│ • pytest     │    │ • npm build   │    │ • template │
+└──────┬───────┘    └──────┬────────┘    └──────┬─────┘
+       │                   │                    │
+       └───────────────────┼────────────────────┘
+                           │
+                    ┌──────▼──────┐
+                    │ Docker Build │  (main branch only)
+                    │ & Push       │
+                    │              │
+                    │ • backend    │
+                    │ • frontend   │
+                    └──────────────┘
+```
+
+### CD Pipeline (`cd.yml`)
+
+Triggered after successful CI on `main`:
+
+1. Copies Helm chart to control plane via SSH
+2. Runs `helm upgrade --install` with the new image tag (`$GITHUB_SHA`)
+3. Verifies rollout status for both deployments
+4. Runs a smoke test against `/health`
+
+### Required GitHub Secrets
+
+| Secret | Description |
+|--------|-------------|
+| `DOCKER_USERNAME` | Docker Hub username |
+| `DOCKER_TOKEN` | Docker Hub access token |
+| `SSH_PRIVATE_KEY` | SSH key for control plane access |
+| `CONTROL_PLANE_HOST` | Public IP of the K8s control plane |
+
+---
+
+## Network Policies
+
+Network policies are defined in `helm/astronova/templates/network-policy.yaml` and enabled by default (`networkPolicies.enabled: true`).
+
+### Policy Summary
+
+```
+┌─────────────────────────────────────────────────┐
+│               Default: DENY ALL                 │
+│              Ingress Traffic                     │
+└─────────────────────────────────────────────────┘
+
+Exceptions:
+
+  ingress-nginx namespace ──► Frontend pods (port 80)
+  ingress-nginx namespace ──► Backend pods  (port 8000)
+  Frontend pods            ──► Backend pods  (port 8000)
+```
+
+| Policy | From | To | Port |
+|--------|------|----|------|
+| Default deny | * | * | — (blocked) |
+| Backend ingress | Frontend pods | Backend | 8000 |
+| Backend ingress | ingress-nginx namespace | Backend | 8000 |
+| Frontend ingress | ingress-nginx namespace | Frontend | 80 |
+
+To disable:
+```bash
+helm upgrade astronova ./helm/astronova --set networkPolicies.enabled=false
+```
+
+---
+
+## Unit Tests
+
+Unit tests are located in `backend/tests/` using **pytest** with the FastAPI `TestClient`.
+
+### Running Tests
+
+```bash
+cd backend
+pip install pytest httpx
+pytest tests/ -v
+```
+
+### Test Coverage
+
+| Test Class | Tests | Description |
+|------------|-------|-------------|
+| `TestListBooks` | 3 | Empty list, single book, multiple books |
+| `TestGetBook` | 2 | Get by ID, 404 for non-existent |
+| `TestCreateBook` | 7 | Full creation, minimal fields, validation errors, persistence |
+| `TestUpdateBook` | 4 | Partial update, multi-field, 404, empty body |
+| `TestDeleteBook` | 3 | Successful delete, 404, removal from list |
+| `TestHealthCheck` | 1 | Health endpoint returns healthy status |
+| **Total** | **20** | |
+
+Each test runs with an isolated store (cleared before and after via `autouse` fixture).
+
+---
+
+## Logging
+
+The backend uses structured JSON logging via Python's `logging` module, configured in `backend/app/logging_config.py`.
+
+### Log Format
+
+```json
+{
+  "timestamp": "2026-07-06T12:00:00+0000",
+  "level": "INFO",
+  "logger": "astronova.http",
+  "message": "request_id=a1b2c3d4 method=GET path=/api/books status=200 duration_ms=1.23"
+}
+```
+
+### Features
+
+- **Request/Response middleware:** Logs every HTTP request with method, path, status code, and duration
+- **Request ID:** Each request gets a unique ID (`X-Request-ID` header) for tracing
+- **JSON format:** Compatible with log aggregation tools (Fluentd, Loki, CloudWatch)
+- **stdout output:** Works with `kubectl logs` and container log drivers
+
+### Viewing Logs
+
+```bash
+# Via kubectl
+kubectl logs -l app.kubernetes.io/name=astronova-backend -f
+
+# Structured log parsing with jq
+kubectl logs -l app.kubernetes.io/name=astronova-backend | jq .
+```
+
+### Log Rotation
+
+Log rotation is handled at two levels:
+
+**1. Application-level (RotatingFileHandler)** — configured in `logging_config.py`:
+
+| Setting | Default | Env Variable | Description |
+|---------|---------|-------------|-------------|
+| Log directory | `/var/log/astronova` | `LOG_DIR` | Where log files are written |
+| Max file size | 10 MB | `LOG_MAX_BYTES` | Size before rotation triggers |
+| Backup count | 5 | `LOG_BACKUP_COUNT` | Number of rotated files to keep |
+| Total max disk | ~60 MB | — | `10MB × (5+1)` files |
+
+Files produced: `app.log` → `app.log.1` → `app.log.2` → ... → `app.log.5`
+
+To customize via Helm environment variables, add to the backend deployment:
+```yaml
+env:
+  - name: LOG_DIR
+    value: "/var/log/astronova"
+  - name: LOG_MAX_BYTES
+    value: "20971520"      # 20 MB
+  - name: LOG_BACKUP_COUNT
+    value: "10"
+```
+
+**2. Container-level (kubelet)** — configure on each node:
+
+```bash
+# /var/lib/kubelet/config.yaml
+containerLogMaxSize: "50Mi"
+containerLogMaxFiles: 5
+```
+
+> **Note:** The application gracefully falls back to stdout-only logging if the log directory is not writable (e.g., no volume mount). In Kubernetes, stdout logs are captured by the container runtime and managed by kubelet's rotation policy.
+
+---
+
 ## Cleanup Instructions
 
 ### Remove Application
@@ -448,3 +742,4 @@ aws ec2 stop-instances --instance-ids $(aws ec2 describe-instances \
 | **Total** | **~$125/mo** (~$4.17/day) |
 
 Stop instances when not in use to minimize costs.
+
