@@ -61,7 +61,10 @@ def setup_logging() -> logging.Logger:
         file_handler.setLevel(logging.INFO)
         file_handler.setFormatter(formatter)
         logger.addHandler(file_handler)
-        logger.info(f"File logging enabled: {LOG_FILE} (max {LOG_MAX_BYTES // (1024*1024)}MB × {LOG_BACKUP_COUNT} backups)")
+        logger.info(
+            f"File logging enabled: {LOG_FILE} "
+            f"(max {LOG_MAX_BYTES // (1024*1024)}MB × {LOG_BACKUP_COUNT} backups)"
+        )
     except (PermissionError, OSError) as e:
         logger.warning(f"File logging disabled — could not create {LOG_DIR}: {e}")
 

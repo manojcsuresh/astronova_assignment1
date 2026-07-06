@@ -40,4 +40,3 @@ async def root():
         "version": "1.0.0",
         "docs": "/docs",
     }
-
